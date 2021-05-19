@@ -1,0 +1,12 @@
+{
+	"stacks_per_network": 3,
+	"blocks_per_stack": 1,
+	"fc_layers": 3,
+	"fc_units": 64,
+	"r_units": 32,
+	"dropout": 0.3,
+	"batch_size": 32,
+	"learning_rate": 0.001,
+	"patience": 20,
+	"epochs": 200
+}

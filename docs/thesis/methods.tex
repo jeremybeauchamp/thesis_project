@@ -1,0 +1,340 @@
+\chapter{Experimental Evaluation}
+\label{chapter:methods}
+
+This chapter will introduce the methods used to train and evaluate the models described in Chapter~\ref{chapter:models} for the tasks of carbohydrate and bolus recommendations, according to the three scenarios detailed in Section~\ref{sec:scenarios}. The experimental methodology is introduced, and experimental results are reported and discussed.
+
+\section{Experimental Methodology}
+\label{sec:methodology}
+
+For each of the 12 subjects in the dataset, their time series data is split into three sets, as follows:
+\begin{itemize}
+    \item {\it Testing}: the last 10 days of data.
+    \item {\it Validation}: the 10 days of data preceding the testing portion.
+    \item {\it Training}: the remainder of the data, around 30 days.
+\end{itemize}
+The blood glucose, carbs, and insulin values are all scaled to be between $[0, 1]$ by using maximum and minimum values computed over training data. When computing the performance metrics at test time, the predicted values are scaled back to the original range.
+The neural architecture is trained to minimize the mean squared error between the actual event (meal or bolus) value recorded in the training data and the estimated value computed by the output node of the fully connected layers in the \ac{LSTM} models, or by the accumulated forecasts in the \ac{N-BEATS} architecture. The Adam \cite{kingma:adam} variant of gradient descent is used for training, with the learning rate and mini-batch size being tuned on the validation data. In an effort to avoid overfitting, dropout and early stopping with a patience of 10 epochs are used in all experiments.
+
+Before training a personalized model for a specific subject, a generic model is first pre-trained on the union of all 12 subjects' training data. The generic model is then fine tuned separately for each individual subject, by continuing training on that subject's training data only. The pre-training allows the model parameters to be in a better starting position before fine tuning, allowing faster and better training. The learning rate and batch size are tuned for each subject on their validation data. 
+% Once the hyper-parameters are tuned, the final models are then fine tuned on the union of the training and validation data for each subject for a maximum of 100 epochs. 
+For each subject, the results are aggregated over 10 models that are trained with different seedings of the random number generators.
+
+The metrics used to evaluate the models are \ac{RMSE} and the \ac{MAE}. Two scores are reported for each of the \ac{LSTM}-based and \ac{N-BEATS}-based recommendation models:
+\begin{enumerate}
+    \item The {\bf $\langle$model$\rangle$.mean} score calculates the average \ac{RMSE} and \ac{MAE} on the testing data across the 10 models trained for each subject, and then averages these scores across all subjects.
+    \item The {\bf $\langle$model$\rangle$.best} score instead selects for each subject the model that performed best in terms of \ac{MAE} on the validation data, out of the 10 models trained for that subject. The \ac{RMSE} and \ac{MAE} test scores are averaged over all subjects.
+\end{enumerate}
+Two sets of models were trained for each recommendation scenario: a set of models was trained and evaluated on {\it inertial} examples and a set was trained and evaluated on {\it unrestricted} examples. 
+% For the carbohydrate and bolus given carbs scenarios, there were no inertial examples in subject 570's testing data. To make the results comparable, subject 570 is not used for computing the results in these scenarios. 
+
+%\textcolor{blue}{For the carbohydrate without bolus recommendation scenario, the models trained on the carbohydrate recommendation examples are then evaluated only on examples where the meal does not have a bolus associated with it. For this scenario, the definition of $\langle$model$\rangle$.mean and $\langle$model$\rangle$.best are slightly different. Given the limited number of examples available for this scenario, instead of calculating the average and best RMSE and MAE on the testing data for each patient and then averaging across all patients, the average and best RMSE and MAE are calculated over all of the testing examples simultaneously.}
+
+
+\subsection{Subject Selection for Testing in Each Recommendation Scenario}
+
+While using both the 2018 and 2020 subsets of the OhioT1DM Dataset \cite{ohiot1dm:marling:kdh18, ohiot1dm:marling:kdh20} provides us with data from 12 total subjects, not all 12 can be used in each scenario, due to insufficient examples in their respective development or test subsets. The subjects whose data was used or not at test time are listed below for each scenario, together with a justification:
+\begin{itemize}
+    \item {\it Carbs$^{(\pm b)}$ Recommendation}: Subjects 567 and 570 were left out at test time. Subject 567 had 0 meal events in the testing portion of their data. Subject 570 frequently used dual boluses; as such, there were very few inertial examples for this subject at all. Of the few inertial examples that were available, 0 were in the testing or validation portions of the data.
+    \item {\it Carbs$^{(-b)}$ Recommendation}: Due to the limited number of examples for this scenario, models were trained and evaluated only for the subjects whose data contained at least 50 carb events with no associated bolus. These are subjects 559, 575, 588, and 591. While subject 596 also had a sufficient number of carb events, it was discovered that all carbohydrate inputs for their \ac{BW} were 0. As a consequence of this missing data, it cannot be determined which boluses were used for \ac{BGL} correction, and which were used to cover meals. Therefore, subject 596 cannot be used in this scenario.
+    \item {\it Bolus$^{(\pm c)}$ Recommendation}: Subjects 544 and 567 were left out at test time. Subject 544  had few inertial examples overall, and 0 in the validation portion of the data. This is because the vast majority of bolus events in their data was used in conjunction with a meal. Similar to the carbohydrate recommendation scenario, subject 567 was not used in this scenario because of the lack of meal events in their test data. The missing meal data would make the bolus recommendation results for this subject unrealistic and also indistinguishable between the inertial and unrestricted cases.
+    \item {\it Bolus$^{(+c)}$ Recommendation}: Subjects 567, 570, and 596 were left out at test time. As explained for other scenarios above, subject 567 had 0 meals in the test portion of their data. For subject 570, there were 0 inertial examples in the test portion. As explained for the Carbs$^{-b}$ recommendation scenario, due to missing \ac{BW} data, for subject 596 it cannot be determined which boluses were used for \ac{BGL} correction, and which were used to cover meals, so their data cannot be used in this scenario, either.
+\end{itemize}
+Irrespective of which subjects are used at test time, the data from all 12 patients is used for pre-training purposes in each recommendation scenario. Furthermore, the set of subjects stays consistent between the inertial and unrestricted cases for any given recommendation scenario.
+
+\subsection{Evaluating the Impact of Pre-processing of Meals}
+\label{sec:pre-evaluation}
+
+To determine the utility of the pre-processing of meals procedure introduced in Section~\ref{sec:pre-processing}, \ac{N-BEATS}-based models were trained and evaluated for the carbohydrate recommendation scenario Carbs$^{(\pm b)}$ using the original data vs. using the pre-processed data. When training on pre-processed data, two development results are reported in Table~\ref{tab:pre-carbs}: when evaluating on all the pre-processed meals in the development data (pre$^+$)  vs. evaluating only on meals that were not added during pre-processing (pre$^-$). The results show that in both cases the pre-processing of meals leads to statistically significant improvements in \ac{RMSE} and \ac{MAE}. Pre-processing of meals also benefits the bolus recommendation scenario, as shown in Table~\ref{tab:pre-bolus}. These results can be seen as further evidence of the fact that the meal timestamps recorded in the smartphone interface are unreliable and that meal times should instead be anchored to the bolus timestamps recorded by the \ac{BW}, as done in the pre-processing procedure.
+
+\begin{table}[ht]
+\setlength{\tabcolsep}{4pt}
+\caption{Results with pre-processing of meals (pre) vs. original raw data for meal events (raw), for the carbohydrate recommendation scenario Carbs$^{(\pm b)}$ on unrestricted examples. pre$^+$ refers to using all pre-processed meals (shifted original meals and added meals), whereas pre$^-$ does not use meals added by the pre-processing procedure. The symbol $\dagger$ indicates a p-value < 0.03 when using a one-tailed t-test to compare against the results without pre-processing (raw).}
+\begin{center}
+\label{tab:pre-carbs}
+\small
+\begin{tabular}{|l|ll|rr|}
+    \cline{2-3}
+    \multicolumn{1}{c|}{} & \multicolumn{2}{c|}{Pre-processing} &  \multicolumn{2}{c}{} \\
+    \cline{2-5}
+	\multicolumn{1}{c|}{} & Train & Devel & RMSE & MAE\\
+    \hline
+    \multirow{2}{*}{N-BEATS.mean} & raw & raw & 13.42 & 10.32\\
+	& pre$^+$ & pre$^-$ & $^\dagger$9.38 & $^\dagger$6.59\\
+	& pre$^+$ & pre$^+$ & $^\dagger${\bf 8.84} & $^\dagger${\bf 6.16}\\
+    \hline
+    \multirow{2}{*}{N-BEATS.best} & raw & raw & 12.32 & 9.28\\
+    & pre$^+$ & pre$^-$ & $^\dagger$8.48 & $^\dagger$5.90\\
+    & pre$^+$ & pre$^+$ & $^\dagger${\bf 8.12} & $^\dagger${\bf 5.53}\\
+    \hline
+\end{tabular}
+\end{center}
+\end{table}
+
+\begin{table}[ht]
+\setlength{\tabcolsep}{4pt}
+\caption{Results with pre-processing of meals (pre) vs. original raw data for meal events (raw), for the Bolus$^{(\pm c)}$ recommendation scenario on unrestricted examples. All meals (shifted or added) are used for the pre-processed data. The symbol $\dagger$ indicates a p-value < 0.01 when using a one-tailed t-test to compare against the results without pre-processing (raw).}
+\begin{center}
+\label{tab:pre-bolus}
+\small
+\begin{tabular}{|l|c|rr|}
+    \cline{2-4}
+	\multicolumn{1}{c|}{} & Pre-processing & RMSE & MAE\\
+    \hline
+    \multirow{2}{*}{N-BEATS.mean} & raw & 1.85 & 1.41\\
+    & pre & $^\dagger${\bf 1.30} & $^\dagger${\bf 0.92}\\
+    \hline
+    \multirow{2}{*}{N-BEATS.best} & raw & 1.81 & 1.32 \\
+    & pre & $^\dagger${\bf 1.22} & $^\dagger${\bf 0.84}\\
+    \hline
+\end{tabular}
+\end{center}
+\end{table}
+
+\subsection{Tuning the Architecture and the Hyper-parameters}
+\label{sec:development}
+
+Table~\ref{tab:state1} show the results of the \ac{LSTM}- and \ac{N-BEATS}-based models, with vs. without using the final state produced by the LSTM$_1$ component as input to the fully connected network. The results show that using the final state from LSTM$_1$ directly as input leads to a substantial improvement for the carbohydrate recommendation scenario Carbs$^{(\pm b)}$, while maintaining a comparable performance for the bolus recommendation scenario. Consequently, in all remaining experiments the architecture is set to use the final state of LSTM$_1$ as input to the \ac{FC} layers.
+% The likely reason that this modification leads to such a significant improvement for carbohydrate recommendation but not for bolus recommendation is that for carbohydrate recommendation the bolus that often accompanies a meal will have been processed by LSTM$_1$. This bolus is likely a major factor in determining the grams of carbs that are recommended. For bolus recommendation, the meal that is paired with the bolus is in the future and is therefore processed by LSTM$_2$. It stands to reason that directly including the final state of LSTM$_1$ would help the carbohydrate recommendation scenario, since it contains the information about the bolus that is paired with the meal. This is not the case with the bolus recommendation scenario, as the most important information is in the final hidden state of LSTM$_2$. Since using the final hidden state of LSTM$_1$ directly as input to the FCN helped significantly for carbohydrate recommendation and had little effect for bolus recommendation, this modeling choice is made in all remaining experimental evaluations.
+
+%The results show that using the final state from LSTM$_1$ directly as input leads to a significant improvement in results, hence this modeling choice is made in all remaining experimental evaluations.
+\begin{table}[ht]
+\caption{Performance of the LSTM- and N-BEATS-based models, with ($+$) and without ($-$) the final state $s_1$ of LSTM$_{1}$ as part of the input to the FC Layers.}
+\begin{center}
+\label{tab:ablation_lstm1}
+\small
+\begin{tabular}{|c|c|rr|c|c|c|rr|}
+    \cline{3-4} \cline{8-9}
+    \multicolumn{2}{c|}{LSTM.mean} & RMSE & MAE & \multicolumn{1}{c}{} & \multicolumn{2}{c|}{N-BEATS.mean} & RMSE & MAE\\
+    \cline{1-4} \cline{6-9}
+    \multirow{2}{*}{Carbs$^{(\pm b)}$} & $- s_1$ & 10.14 & 7.56 & & \multirow{2}{*}{Carbs$^{(\pm b)}$} & $- s_1$ & 10.27 & 7.58\\
+    & $+ s_1$ & {\bf 8.99} & {\bf 6.57} & & & $+ s_1$ & {\bf 8.84} & {\bf 6.16}\\
+    \cline{1-4} \cline{6-9}
+    \multirow{2}{*}{Bolus$^{(\pm c)}$} & $- s_1$ & {\bf 1.33} & {\bf 0.97} & & \multirow{2}{*}{Bolus$^{(\pm c)}$} & $- s_1$ & 1.33 & {\bf 0.85}\\
+    & $+ s_1$ & 1.41 & 1.03 & & & $+ s_1$ & {\bf 1.30} & 0.92\\
+    \cline{1-4} \cline{6-9}
+\end{tabular}
+\end{center}
+\label{tab:state1}
+\end{table}
+
+In the original \ac{N-BEATS} model of Oreshkin et al. \cite{oreshkin:nbeats}, the backcast and forecast outputs of each block are produced as the result of two separate fully connected layers. In the block architecture shown in Figures~\ref{fig:carbs},~\ref{fig:bolus}, and~\ref{fig:nbeats} however, the {\it \ac{FC} Layers} component uses just one final fully connected layer to produce both backcast and forecast values. The results in Table~\ref{tab:splitting} show that, overall, using a joint final layer is competitive or better than using separate layers.
+
+\begin{table}[ht]
+\caption{N-BEATS-based model results, with a {\it separate} vs. {\it joint} final fully connected layer for computing backcast and forecast values.}
+\begin{center}
+\label{tab:ablation_split}
+\small
+\begin{tabular}{|c|c|c|c|}
+	\cline{3-4}
+	\multicolumn{2}{c|}{N-BEATS.mean} & RMSE & MAE\\
+	\hline
+	\multirow{2}{*}{Carbs$^{(\pm b)}$} & {\it separate} & {\bf 8.77} & 6.48\\
+	& {\it joint} & 8.84 & {\bf 6.16}\\
+	\hline
+	\multirow{2}{*}{Bolus$^{(\pm c)}$} & {\it separate} & 1.32 & 0.94\\
+	& {\it joint} & {\bf 1.30} & {\bf 0.92}\\
+	\hline
+\end{tabular}
+\end{center}
+\label{tab:splitting}
+\end{table}
+
+For each prediction scenario, the hyper-parameters for both the \ac{LSTM}-based and \ac{N-BEATS}-based models were tuned on development data. The inertial and unrestricted models are tuned independent of each other. The learning rate was tuned by monitoring the learning curves, using values between 0.0002 \cite{rubin_falcone:nbeats_bgl} and 0.1. After multiple experiments, a fixed learning rate of 0.001 was observed to give the best results on development data in all scenarios. The number of blocks in \ac{N-BEATS}, the number of \ac{FC} layers in the \ac{LSTM}, and the dropout rate were then tuned in that order. The number of \ac{N-BEATS} blocks was selected from \{1, ..., 10\}, the number of layers was selected from \{1, 2, 3, 4, 5\}, whereas the dropout rate was tuned with values from \{0, 0.1, 0.2, 0.3, 0.4 0.5\}. The tuned values are shown in Table~\ref{tab:hyper-lstm} for the \ac{LSTM} models and Table~\ref{tab:hyper-nbeats} for the \ac{N-BEATS} models. Overall, the \ac{LSTM}-based models worked best with only 2 or 3 fully connected layers in all scenarios, whereas the \ac{N-BEATS}-based models worked best with 4 or 5 fully connected layers. The tuned number of blocks in the \ac{N-BEATS}-based models varied between 3 and 5, depending on the scenario and the unrestricted vs. inertial case. The tuned dropout rates varied a lot between scenarios for the \ac{LSTM}-based models, with rates ranging from 0 to 0.5, whereas the tuned rates for \ac{N-BEATS}-based models varied between 0.2 and 0.5.
+
+\begin{table}[ht]
+\caption{Tuned hyper-parameters for the LSTM-based models.}
+\label{tab:hyper-lstm}
+\begin{center}
+\small
+\begin{tabular}{|c|c|c|c|}
+\cline{3-4}
+\multicolumn{2}{l}{} & \multicolumn{2}{|c|}{Hyper-Parameters}\\
+\hline
+Scenario & Examples & FC Layers & Dropout\\
+\hline
+\multirow{2}{*}{Carbs$^{(\pm b)}$} & Inertial & 3 & 0.1\\
+& Unrestricted & 3 & 0.1\\
+\hline
+\multirow{2}{*}{Bolus$^{(\pm c)}$} & Inertial & 3 & 0.0\\
+& Unrestricted & 2 & 0.3\\
+\hline
+\multirow{2}{*}{Bolus$^{(+c)}$} & Inertial & 2 & 0.2\\
+& Unrestricted & 2 & 0.5\\
+\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+\begin{table}[ht]
+\caption{Tuned hyper-parameters for the N-BEATS-based models.}
+\label{tab:hyper-nbeats}
+\begin{center}
+\small
+\begin{tabular}{|c|c|c|c|c|}
+\cline{3-5}
+\multicolumn{2}{l}{} & \multicolumn{3}{|c|}{Hyper-Parameters}\\
+\hline
+Scenario & Examples & Blocks & FC Layers & Dropout\\
+\hline
+\multirow{2}{*}{Carbs$^{(\pm b)}$} & Inertial & 5 & 2 & 0.3\\
+& Unrestricted & 3 & 3 & 0.3\\
+\hline
+\multirow{2}{*}{Bolus$^{(\pm c)}$} & Inertial & 5 & 4 & 0.2\\
+& Unrestricted & 4 & 4 & 0.2\\
+\hline
+\multirow{2}{*}{Bolus$^{(+c)}$} & Inertial & 5 & 4 & 0.5\\
+& Unrestricted & 3 & 5 & 0.2\\
+\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+
+The size of the \ac{LSTM} state was tuned to 32, whereas the size of each fully connected layer was tuned to 64, which is substantially smaller than the hidden size of 512 used in the original \ac{N-BEATS} model \cite{oreshkin:nbeats}. For the carbohydrates without bolus scenario Carbs$^{(-b)}$, due to the much smaller number of examples, the number of units in the \ac{LSTM} networks and fully connected layers were reduced by a factor of 2. The same hyper-parameters that were tuned on the general carbohydrate recommendation scenario Carbs$^{(\pm b)}$ were used for Carbs$^{(-b)}$.
+
+\section{Experimental Results}
+\label{sec:results}
+
+\begin{table*}[t]\setlength{\tabcolsep}{4pt}
+\caption{Results for the Carbs$^{(\pm b)}$ and Carbs$^{(-b)}$ recommendation scenarios, for both classes of examples. The simple $\dagger$ indicates a p-value < 0.05 when using a one-tailed t-test to compare against the baseline results; the double $\ddagger$ indicates statistical significance for comparison against the baselines as well as against the competing neural method; the $\uparrow$ indicates significant with respect to the Global Average baseline only.}
+\begin{center}
+\label{tab:carb_results}
+\small
+\begin{tabular}{|l|rr|rr|}
+   	\cline{2-5}
+	\multicolumn{1}{c}{} & \multicolumn{2}{|c|}{Inertial} & \multicolumn{2}{c|}{Unrestricted}\\
+	\hline
+	Carbs$^{(\pm b)}$ recommendation & RMSE & MAE & RMSE & MAE\\
+	\hline
+	Global Average & 20.90 & 17.30 & 20.68 & 17.10\\
+	ToD Average & 20.01 & 15.78 & 19.82 & 15.68\\
+	\hline
+	LSTM.mean & 11.55 & 7.81 & 10.99 & 7.40\\
+	LSTM.best & 10.95 & 7.50 & 10.50 & 7.31\\
+	\hline
+	N-BEATS.mean & $^\ddagger${\bf 9.79} & $^\ddagger${\bf 6.45} & 10.34 & 7.04\\
+	N-BEATS.best & 9.92 & 6.56 & $^\dagger${\bf 10.07} & $^\dagger${\bf 6.75}\\
+	\hline
+	\multicolumn{5}{c}{}\\[-1.5ex]
+	\cline{2-5}
+	\multicolumn{1}{c}{} & \multicolumn{2}{|c|}{Inertial} & \multicolumn{2}{c|}{Unrestricted}\\
+	\hline
+	Carbs$^{(-b)}$ recommendation & RMSE & MAE & RMSE & MAE\\
+	\hline
+	Global Average & 15.92 & 13.71 & 14.66 & 12.19\\
+	ToD Average & 15.55 & 13.45 & 14.27 & 11.93\\
+	\hline
+	LSTM.mean & 14.02 & 11.47 & 14.70 & 12.27\\
+	LSTM.best & 13.75 & 10.92 & 14.94 & 12.57\\
+	\hline
+	N-BEATS.mean & {\bf 13.76} & {\bf 11.42} & $^\uparrow${\bf 13.69} & $^\uparrow${\bf 11.09}\\
+	N-BEATS.best & 14.52 & 11.78 & 14.17 & 11.47\\
+	\hline
+\end{tabular}
+\end{center}
+\end{table*}
+
+\begin{table*}[t]\setlength{\tabcolsep}{4pt}
+\caption{Results for the Bolus$^{(\pm c)}$ and Bolus$^{(+c)}$ recommendation scenarios, for both classes of examples. The simple $\dagger$ indicates a p-value < 0.05 when using a one-tailed t-test to compare against the baseline results; the double $\ddagger$ indicates statistical significance for comparison against the baselines as well as against the competing neural method; the $\uparrow$ indicates significant with respect to the Global Average baseline only.}
+\begin{center}
+\label{tab:bolus_results}
+\small
+\begin{tabular}{|l|rr|rr|}
+   	\cline{2-5}
+	\multicolumn{1}{c}{} & \multicolumn{2}{|c|}{Inertial} & \multicolumn{2}{c|}{Unrestricted}\\
+	\hline
+	Bolus$^{(\pm c)}$ recommendation & RMSE & MAE & RMSE & MAE\\
+	\hline
+	Global Average & 2.40 & 2.13 & 2.84 & 2.30\\
+	ToD Average & 2.21 & 1.86 & 2.71 & 2.17\\
+	\hline
+	LSTM.mean & 1.75 & 1.35 & 1.53 & 1.10\\
+	LSTM.best & 1.70 & 1.30 & 1.50 & 1.05\\
+	\hline
+	N-BEATS.mean & $^\dagger${\bf 1.56} & $^\ddagger${\bf 1.20} & $^\dagger${\bf 1.49} & 1.04\\
+	N-BEATS.best & 1.65 & 1.26 & 1.51 & $^\dagger${\bf 1.03}\\
+	\hline
+	\multicolumn{5}{c}{}\\[-1.5ex]
+	\cline{2-5}
+	\multicolumn{1}{c}{} & \multicolumn{2}{|c|}{Inertial} & \multicolumn{2}{c|}{Unrestricted}\\
+	\hline
+	Bolus$^{(+c)}$ recommendation & RMSE & MAE & RMSE & MAE\\
+	\hline
+	Global Average & 3.00 & 2.35 & 3.04 & 2.39\\
+	ToD Average & 2.87 & 2.21 & 2.90 & 2.25\\
+	\hline
+	LSTM.mean & 1.02 & 0.73 & {\bf 1.00} & 0.73\\
+	LSTM.best & 0.94 & 0.67 & $^\dagger${\bf 1.00} & $^\dagger${\bf 0.72}\\
+	\hline
+	N-BEATS.mean & 0.89 & 0.65 & 1.11 & 0.82\\
+	N-BEATS.best & $^\dagger${\bf 0.85} & $^\dagger${\bf 0.61} & 1.06 & 0.78\\
+	\hline
+\end{tabular}
+\end{center}
+\end{table*}
+
+
+Tables~\ref{tab:carb_results} and \ref{tab:bolus_results} show the results for the two baselines and the two neural architectures: the \ac{LSTM}-based (Figures~\ref{fig:carbs} and ~\ref{fig:bolus}) and the \ac{N-BEATS}-based (Figure~\ref{fig:nbeats}). Across all scenarios and for both example classes, the neural models outperform both baselines, often by a wide margin. Furthermore, the \ac{N-BEATS}-based models outperform their \ac{LSTM}-based counterparts across all evaluations with inertial examples, which are the ones with the most practical utility. In general, there is little difference between the best model scores and the average model scores, which means that the model performance is relatively stable with respect to the random initialization of the network parameters.
+
+For the prediction of carbohydrates without an associated bolus scenario Carbs$^{(-b)}$, the improvement brought by the two neural models over the two baselines was less substantial, which is to be expected for two reasons. First, the baselines do much better in this scenario than in the more general carbohydrate recommendation scenario Carbs$^{(\pm b)}$ because most of the carb intakes are relatively small, e.g. hypo correction events where subjects are advised to eat a fixed amount of carbohydrate. Second, and most importantly, the number of training carbohydrate events and their associated examples in the Carbs$^{(-b)}$ scenario is much smaller than in the Carbs$^{(\pm b)}$ scenario (Table~\ref{tab:meals}), which makes ML models much less effective.
+
+
+In all experiments reported so far, one model was trained for all prediction horizons, using the value of $\tau \in \{30, 35, ..., 90\}$ as an additional input feature. This global model was then tested on examples from all prediction horizons. To determine if transfer learning happens among different prediction horizons, for each value of $\tau \in \{30, 45, 60, 75, 90\}$ at test time, the performance of the globally trained model and the performance of a model trained only on examples for that particular prediction horizon are compared, using inertial examples for both. The inertial case was chosen for this experiment because it corresponds better to the intended use of a carbohydrate or bolus recommendation system. Furthermore, only the \ac{N-BEATS}-based model is used for these experiments because of its better performance in the inertial case. The results in Table \ref{tab:transfer_time} show transfer learning clearly happening for the carbohydrate recommendation Carbs$^{(\pm b)}$ and bolus given carbs recommendation Bolus$^{(+c)}$ scenarios, where the models trained on all prediction horizons outperform those trained only on a specific prediction horizon when evaluated on that prediction horizon. For the bolus recommendation scenario Bolus$^{(-c)}$ (i.e. Bolus$^{(\pm c)}$ inertial) the results were mixed, with transfer learning being clear only for the short $\tau = 30$ time horizon. Transfer learning results for the Carbs$^{(-b)}$ scenario are not calculated due to the lack of a sufficient number of training examples for each prediction horizon.
+
+
+\begin{table}[ht]
+\setlength{\tabcolsep}{1.75pt}
+\caption{Comparison between models trained on all prediction horizons vs. one prediction horizon $\tau$, when evaluated on the prediction horizon $\tau$. The symbol $\dagger$ indicates a p-value < 0.05 when using a one-tailed t-test to compare against the one prediction horizon results.}
+% (only for N-BEATS.mean).}
+\begin{center}
+\label{tab:transfer_time}
+\small
+\begin{tabular}{|c|c|rr|rr|rr|rr|rr|rr|rr}
+    \cline{3-14}
+    \multicolumn{2}{c|}{} & \multicolumn{12}{c|}{Carbs$^{(\pm b)}$ recommendation}\\
+    \cline{3-14}
+    \multicolumn{2}{c|}{} & \multicolumn{2}{c|}{$\tau=30$} & \multicolumn{2}{c|}{$\tau=45$} & \multicolumn{2}{c|}{$\tau=60$} & \multicolumn{2}{c|}{$\tau=75$} & \multicolumn{2}{c|}{$\tau=90$} & \multicolumn{2}{c|}{Average}\\
+    \cline{2-14}
+     \multicolumn{1}{c|}{}& Trained & \multicolumn{2}{c|}{\scriptsize RMSE MAE} & \multicolumn{2}{c|}{\scriptsize RMSE MAE} & \multicolumn{2}{c|}{\scriptsize RMSE MAE} & \multicolumn{2}{c|}{\scriptsize RMSE MAE} & \multicolumn{2}{c|}{\scriptsize RMSE MAE} & \multicolumn{2}{c|}{\scriptsize RMSE MAE} \\
+    \hline
+    \multirow{2}{*}{N-BEATS.mean} & One $\tau$ & {\bf 9.74} & 6.72 & 10.24 & 6.89 & 10.06 & 6.85 & 10.52 & 7.19 & 9.82 & 6.73 & 10.08 & 6.88\\
+    & All $\tau$ & 9.96 & {\bf 6.57} & {\bf 9.98} & {\bf 6.56} & {\bf 9.84} & {\bf 6.50} & $^\dagger${\bf 9.55} & $^\dagger${\bf 6.30}& {\bf 9.37} & {\bf 6.22} & {\bf 9.74} & {\bf 6.43}\\
+    \hline
+    \multirow{2}{*}{N-BEATS.best} & One $\tau$ & 9.92 & 6.70 & 10.39 & 6.90 & 10.21 & 6.88 & 10.62 & 7.18 & 9.92 & 6.66 & 10.21 & 6.86\\
+    & All $\tau$ & {\bf 9.84} & {\bf 6.50} & {\bf 9.94} & {\bf 6.56} & {\bf 10.02} & {\bf 6.57} & {\bf 9.76} & $^\dagger${\bf 6.34} & {\bf 9.43} & {\bf 6.08} & {\bf 9.80} & {\bf 6.41}\\
+    \hline
+    
+    \multicolumn{14}{c}{}\\[-1.5ex]
+
+    \cline{3-14}
+    \multicolumn{2}{c|}{} & \multicolumn{12}{c|}{Bolus$^{(-c)}$ recommendation}\\
+    \cline{3-14}
+    \multicolumn{2}{c|}{} & \multicolumn{2}{c|}{$\tau=30$} & \multicolumn{2}{c|}{$\tau=45$} & \multicolumn{2}{c|}{$\tau=60$} & \multicolumn{2}{c|}{$\tau=75$} & \multicolumn{2}{c|}{$\tau=90$} & \multicolumn{2}{c|}{Average}\\
+    \cline{2-14}
+     \multicolumn{1}{c|}{}& Trained & \multicolumn{2}{c|}{\scriptsize RMSE MAE} & \multicolumn{2}{c|}{\scriptsize RMSE MAE} & \multicolumn{2}{c|}{\scriptsize RMSE MAE} & \multicolumn{2}{c|}{\scriptsize RMSE MAE} & \multicolumn{2}{c|}{\scriptsize RMSE MAE} & \multicolumn{2}{c|}{\scriptsize RMSE MAE} \\
+    \hline
+    \multirow{2}{*}{N-BEATS.mean} & One $\tau$ & 1.82 & 1.42 & {\bf 1.57} & {\bf 1.24} & 1.51 & 1.24 & {\bf 1.37} & {\bf 1.10} & 1.40 & 1.17 & 1.53 & 1.23\\
+    & All $\tau$ & {\bf 1.75} & {\bf 1.33} & 1.61 & {\bf 1.24} & {\bf 1.47} & $^\dagger${\bf 1.17} & 1.38 & {\bf 1.10} & {\bf 1.28} & $^\dagger${\bf 1.03} & {\bf 1.50} & $^\dagger${\bf 1.17}\\
+    \hline
+    \multirow{2}{*}{N-BEATS.best} & One $\tau$ & 1.77 & 1.37 & {\bf 1.54} & {\bf 1.21} & {\bf 1.51} & {\bf 1.23} & {\bf 1.38} & {\bf 1.10} & {\bf 1.34} & {\bf 1.11} & {\bf 1.51} & {\bf 1.20}\\
+    & All $\tau$ & {\bf 1.72} & {\bf 1.28} & 1.75 & 1.33 & 1.58 & {\bf 1.23} & 1.45 & 1.12 & 1.44 & 1.13 & 1.59 & 1.22\\
+    \hline
+    
+    \multicolumn{14}{c}{}\\[-1.5ex]
+
+    \cline{3-14}
+    \multicolumn{2}{c|}{} & \multicolumn{12}{c|}{Bolus$^{(+c)}$ recommendation}\\
+    \cline{3-14}
+    \multicolumn{2}{c|}{} & \multicolumn{2}{c|}{$\tau=30$} & \multicolumn{2}{c|}{$\tau=45$} & \multicolumn{2}{c|}{$\tau=60$} & \multicolumn{2}{c|}{$\tau=75$} & \multicolumn{2}{c|}{$\tau=90$} & \multicolumn{2}{c|}{Average}\\
+    \cline{2-14}
+     \multicolumn{1}{c|}{}& Trained & \multicolumn{2}{c|}{\scriptsize RMSE MAE} & \multicolumn{2}{c|}{\scriptsize RMSE MAE} & \multicolumn{2}{c|}{\scriptsize RMSE MAE} & \multicolumn{2}{c|}{\scriptsize RMSE MAE} & \multicolumn{2}{c|}{\scriptsize RMSE MAE} & \multicolumn{2}{c|}{\scriptsize RMSE MAE} \\
+    \hline
+    \multirow{2}{*}{N-BEATS.mean} & One $\tau$ & 0.98 & 0.73 & 0.91 & 0.69 & 0.91 & 0.69 & 0.95 & 0.74 & 0.93 & 0.72 & 0.94 & 0.71\\
+    & All $\tau$ & {\bf 0.95} & {\bf 0.68} & {\bf 0.87} & {\bf 0.65} & {\bf 0.86} & {\bf 0.65} & $^\dagger${\bf 0.87} & $^\dagger${\bf 0.65} & $^\dagger${\bf 0.86} & $^\dagger${\bf 0.64} & $^\dagger${\bf 0.88} & $^\dagger${\bf 0.65}\\
+    \hline
+    \multirow{2}{*}{N-BEATS.best} & One $\tau$ & {\bf 0.94} & 0.69 & 0.91 & 0.69 & 0.92 & 0.68 & 0.93 & 0.71 & 0.91 & 0.70 & 0.92 & 0.69\\
+    & All $\tau$ & {\bf 0.94} & {\bf 0.66} & {\bf 0.84} & $^\dagger${\bf 0.62} & $^\dagger${\bf 0.82} & $^\dagger${\bf 0.59} & $^\dagger${\bf 0.82} & $^\dagger${\bf 0.61} & $^\dagger${\bf 0.83} & $^\dagger${\bf 0.61} & $^\dagger${\bf 0.85} & $^\dagger${\bf 0.62}\\
+    \hline
+\end{tabular}
+\end{center}
+\end{table}

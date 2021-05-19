@@ -1,0 +1,242 @@
+\chapter{The OhioT1DM Dataset for Recommendation Examples}
+\label{chapter:data}
+
+%\section{}
+%\label{sec:dataset}
+
+To evaluate the proposed recommendation models, training and test examples are created using data collected from 12 subjects with type 1 diabetes that is distributed with the OhioT1DM dataset~\cite{ohiot1dm:marling:kdh20}. The 12 subjects are partitioned in two subsets as follows:
+\begin{enumerate}
+    \item {\bf OhioT1DM 2018}: This is the first part of the dataset, containing data collected from 6 patients. It was used for the 2018 \ac{BGLP} challenge \cite{kdh-2018-proceedings}.
+    \item {\bf OhioT1DM 2020}: This is the second part of the dataset, containing data collected from 6 additional patients. It was used for the 2020 \ac{BGLP} challenge \cite{kdh-2020-proceedings}.
+\end{enumerate}
+Time series containing the basal rate of insulin, boluses, meals, and \ac{BGL} readings were collected over 8 weeks, although the exact number of days varies from subject to subject. 
+Insulin and \ac{BGL} data was automatically recorded by each subject's insulin pump.  Meal data was collected in two different ways.  Subjects self reported meal times and estimated carbs via a smartphone interface.  Subjects also entered estimated carbs into a bolus calculator when bolusing for meals, and this data was recorded by the insulin pump.
+
+\section{The Bolus Wizard}
+\label{sec:bw}
+
+To determine their insulin dosages, the subjects in the OhioT1DM study used a bolus calculator, or \ac{BW}, which was integrated in their insulin pumps.  They used it to calculate the bolus amount before each meal as well as when using a bolus to correct for hyperglycemia.  To use the \ac{BW}, a subject enters their current blood glucose level and, if eating, their estimated number of grams of carbohydrate.  To calculate a recommended insulin dosage, the \ac{BW} uses this input from the subject, plus the amount of active insulin the subject already has in their system, along with the following three pre-programmed, patient-specific parameters:
+\begin{enumerate}
+    \item The carb ratio, which indicates the number of grams of carbohydrate that are covered by a unit of insulin.
+    \item The insulin sensitivity, which tells how much a unit of insulin is expected to lower the subject's blood glucose level.
+    \item The target blood glucose range, which defines an individual's lower and upper boundaries for optimal blood glucose control.
+\end{enumerate}
+All three parameters may vary, for the same individual, throughout the day and over time\footnote{\url{https://www.medtronicdiabetes.com/loop-blog/4-features-of-the-bolus-wizard}}. Given this input and these parameters, the \ac{BW} calculates the amount of insulin the subject should take to maintain or achieve a blood glucose level within their target range. The calculation is displayed to the subject as a recommendation, which the subject may then accept or override.
+
+Based on the inputs and the patient-specific parameters described above, the \ac{BW} uses a deterministic formula to calculate the bolus amount before each meal. As such, when trained in the bolus given carbs recommendation scenario, there is the risk that the deep learning models introduced in Section~\ref{sec:models} might simply learn to reproduce this deterministic dependency between bolus and carbs, while ignoring the target \ac{BG} level that is used as input. However, this is not the case in our experimental settings, for the following reasons:
+\begin{itemize}
+    \item The machine learning models do not have access to any of the three patient-specific parameters above, which can change throughout the day and over time, and which are set based on advice from a health care professional.
+    \item The \ac{BW} uses a fixed target \ac{BG} range depending on the time of day, whereas the target in the recommendation scenarios is a more specific \ac{BG} level, to be achieved at a specific time in the near future.
+    \item The amount of insulin calculated by the \ac{BW} is only a recommendation, which is often overridden by subjects. An analysis of the OhioT1DM dataset was conducted in order to count the number of times the amount of insulin that was actually delivered was different from the BW recommendation. The analysis revealed that, of all the times that the \ac{BW} was used, its recommendation was overridden for about a fifth of the boluses. Furthermore, there are subjects in the dataset who often did not use the \ac{BW} (540 and 567), or who 
+    chose to not use the \ac{BW} at all (596).
+\end{itemize}
+Therefore, the machine learning models will have to go beyond using solely the carbohydrate amount in the intended meal. In order to fit the bolus recommendation examples, they will need to learn the impact that a bolus has on the target \ac{BG} level for the specified prediction horizon, taking into account the amount of carbohydrate in the meal as well as the history of carbs, insulin, and \ac{BG} levels. This data driven approach to bolus recommendation relieves the physician from the cognitively demanding task of regularly updating parameters such as the carb ratio and the insulin sensitivity, which often requires multiple fine tuning steps. In contrast, any relevant signal that is conveyed through the carb ratio and insulin sensitivity is expected to be learned by the machine learning models from the data.
+
+
+\section{Pre-processing of Meals and BG Levels}
+\label{sec:pre-processing}
+
+While exploring the data, it was observed that self-reported meals and their associated boluses were in unexpected temporal positions relative to each other. For many meals, patients recorded a timestamp in the smartphone interface that preceded the corresponding bolus timestamp recorded in the insulin pump. This was contrary to what was recommended to the subjects by their physicians, which was to bolus shortly before the meal, and no more than 15 minutes prior to the meal. This discrepancy is likely due to subjects reporting incorrect meal times in the smartphone interface.
+
+To correct the meal events, the data provided to the \ac{BW} was used in a pre-processing step that changed the timestamp of each meal associated with a bolus to be exactly 10 minutes after that bolus. For these meals, the number of carbs provided to the \ac{BW} was used, which is likely to be more accurate than the estimate provided by the subject through the smartphone interface. To determine if the self-reported meal event was associated with a bolus having non-zero carb input, the meal that was closest to the bolus was searched within one hour before or after it. In case there were two meals that were equally close to the bolus, the one for which the number of carbs reported in the smartphone interface was closest to the number of carbs entered into the \ac{BW} was selected. If no self-reported meal was found within one hour of the bolus, it was assumed that the subject forgot to log their meal on the smartphone interface. As such, a meal was added 10 minutes after the bolus, using the amount of carbs specified in the \ac{BW} for that bolus. Ablation results reported in Section~\ref{sec:pre-evaluation} show that this pre-processing of meal events leads to significantly more accurate predictions, which further justifies the pre-processing.
+
+All gaps in \ac{BGL} data are filled in with linearly interpolated values. However, examples that meet any of the following criteria are filtered out:
+\begin{enumerate}
+    \item The \ac{BGL} target is interpolated.
+    \item The \ac{BGL} at present time $t$ is interpolated.
+    \item There are more than 2 interpolated \ac{BGL} measurements in the one hour of data prior to time $t$.
+    \item There are more than 12 interpolated \ac{BGL} measurements in the 6 hours of data prior to time $t$.
+\end{enumerate}
+
+
+
+\section{Mapping Prototypical Recommendation Scenarios to Datasets}
+\label{sec:mapping}
+
+According to the definition given in Section~\ref{sec:scenarios}, the carbohydrate recommendation scenario refers to estimating the amount of carbohydrate $C_{t+10}$ to have in a meal in order to achieve a target \ac{BG} value $G_{t+10+\tau}$. This is done by using the history of data up to and including the present time $t$. However, many carbohydrate intake events $C_{t+10}$ are regular meals, which means that they are preceded by a bolus event at time $t$. Since in the carbohydrate recommendation scenario, the cases where the subject eats in order to correct or prevent hypoglycemia are particularly of interest, two separate datasets for carbohydrate prediction were created:
+\begin{enumerate}
+    \item Carbs$^{(\pm b)}$: this will contain examples for all carbohydrate intake events, with $(+b)$ or without $(-b)$ an associated bolus.
+    \item Carbs$^{(-b)}$: this will contain examples only for carbohydrate intake events without $(-b)$ an associated bolus.
+\end{enumerate}
+Most of the Carbs$^{(-b)}$ examples are expected to happen in one of three scenarios: (1) when correcting for hypoglycemia; (2) before exercising; and (3) when having a bedtime snack to prevent nocturnal hypoglycemia. Given that they are only a small portion of the overall carbohydrate events, Section~\ref{sec:results} presents the results for both Carbs$^{(\pm b)}$ and Carbs$^{(-b)}$ recommendation scenarios.
+
+Furthermore, mirroring the two bolus recommendation scenarios introduced in Section~\ref{sec:scenarios}, the following dataset notation is used:
+\begin{enumerate}
+    \item Bolus$^{(\pm c)}$: this will contain examples for all bolus events, with $(+c)$ or without $(-c)$ an associated carbohydrate intake.
+    \item Bolus$^{(+c)}$: this will contain examples only for the bolus events with $(+c)$ an associated carbohydrate intake.
+\end{enumerate}
+The three major recommendation scenarios introduced in Section~\ref{sec:scenarios} can then be mapped to the corresponding datasets as follows:
+\begin{enumerate}
+    \item {\bf Carbohydrate Recommendations}: Estimate the amount of carbohydrate $C_{t+10}$ to have in a meal in order to achieve a target \ac{BG} value $G_{t+10+\tau}$.
+    \begin{itemize}
+        \item Carbs$^{(-b)}$, inertial: this reflects the prototypical scenario where a carbohydrate intake is recommended to correct or prevent hypoglycemia.
+    \end{itemize}
+    \item {\bf Bolus Recommendations}: Estimate the amount of insulin $B_{t+10}$ to deliver with a bolus in order to achieve a target \ac{BG} value $G_{t+10+\tau}$.
+    \begin{itemize}
+        \item Bolus$^{(\pm c)}$, inertial: this reflects the prototypical scenario where a bolus is recommended to correct or prevent hyperglycemia. Because in the inertial case a carb event cannot appear after the bolus, this could also be denoted as Bolus$^{(-c)}$.
+    \end{itemize}
+    \item {\bf Bolus Recommendations given Carbohydrates}: Expecting that a meal with $C_{t+20}$ grams of carbohydrate will be consumed 20 minutes from now, estimate the amount of insulin $B_{t+10}$ to deliver with a bolus 10 minutes before the meal in order to achieve a target \ac{BG} value $G_{t+10+\tau}$.
+    \begin{itemize}
+        \item Bolus$^{(+c)}$, inertial: this reflects the prototypical scenario where a bolus is recommended before a meal.
+    \end{itemize}
+\end{enumerate}
+
+
+\section{Carbohydrate and Bolus Statistics}
+\label{sec:statistics}
+
+Table~\ref{tab:meals} shows the number of carbohydrate events in each subject's pre-processed data, together with the minimum, maximum, median, average, and standard deviation for the number of carbs per meal. Overall, the average number of carbs per meal is between 22 and 69, with the exception of subjects 570 and 544 whose meal averages and standard deviations are significantly larger. 
+Table~\ref{tab:boluses} shows similar statistics for boluses and their dosages, expressed in units of insulin.
+Overall, the number of boluses is more variable than the number of meals. There is also a fairly wide range of average bolus values in the data, with subject 567 having a much higher average than other subjects. It is also interesting to note that subject 570, who had the largest average carbs per meal, had more than twice the number of boluses than any other subject while at the same time having the lowest average bolus. Subject 570 also used many dual boluses, which were not used as prediction labels because the scope of the project covers only recommendations for regular boluses.
+
+\begin{table}[t]\setlength{\tabcolsep}{4pt}
+\begin{center}
+\caption{Per subject and total meal and carbohydrate per meal statistics: Minimum, Maximum, Median, Average, and Standard Deviation (StdDev). Carbs$^{(\pm b)}$ refers to all carbohydrate intake events; Carbs$^{(-b)}$ refers to carbohydrate intakes without a bolus. Statistics are shown for the 2018 subset, the 2020 subset, and for the entire OhioT1DM dataset.}
+\label{tab:meals}
+\small
+\begin{tabular}{|crr|rrrrc|}
+    \cline{4-8}
+    \multicolumn{3}{c}{} & \multicolumn{5}{|c|}{Carbs Per Meal}\\
+	\hline
+	Subject & \multicolumn{1}{c}{Carbs$^{(\pm b)}$} & \multicolumn{1}{c|}{Carbs$^{(-b)}$} & \multicolumn{1}{c}{Minimum} & \multicolumn{1}{c}{Maximum}
+	& \multicolumn{1}{c}{Median} & \multicolumn{1}{c}{Average} & StdDev\\
+	\hline
+	559 & 215 & 83 & 8.0 & 75.0 & 30.0 & 35.5 & 15.5\\
+    563 & 225 & 28 & 5.0 & 84.0 & 31.0 & 33.8 & 18.0\\
+    570 & 174 & 39 & 5.0 & 200.0 & 115.0 & 106.1 & 41.5\\
+	575 & 297 & 122 & 1.0 & 110.0 & 40.0 & 40.0 & 22.0\\
+	588 & 268 & 73 & 2.0 & 60.0 & 20.0 & 22.7 & 14.6\\
+	591 & 264 & 60 & 3.0 & 77.0 & 28.0 & 31.5 & 14.1\\
+	\hline
+	2018 Total & 1443 & 405 & 1.0 & 200.0 & 33.0 & 41.5 & 32.7\\
+	\hline
+	540 & 234 & 14 & 1.0 & 110.0 & 40.0 & 50.2 & 29.8\\
+	544 & 206 & 41 & 1.0 & 175.0 & 60.0 & 68.7 & 36.3\\
+	552 & 271 & 25 & 3.0 & 135.0 & 26.0 & 36.7 & 29.3\\
+	567 & 207 & 5 & 20.0 & 140.0 & 67.0 & 67.0 & 21.5\\
+	584 & 233 & 44 & 15.0 & 78.0 & 60.0 & 54.6 & 11.6\\
+	596 & 300 & 277 & 1.0 & 64.0 & 25.0 & 25.1 & 14.0\\
+	\hline
+	2020 Total & 1451 & 406 & 1.0 & 175.0 & 42.0 & 48.2 & 29.5\\
+	\hline
+	Combined Total & 2894 & 811 & 1.0 & 200.0 & 39.0 & 44.9 & 31.3\\
+	\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+\begin{table}[t]\setlength{\tabcolsep}{4pt}
+\begin{center}
+\caption{Per subject and total boluses and insulin units statistics: Minimum, Maximum, Median, Average, and Standard Deviation (StdDev). Bolus$^{(\pm c)}$ refers to all bolus events; Bolus$^{(+c)}$ refers to bolus events associated with a meal. Statistics are shown for the 2018 subset, the 2020 subset, and for the entire OhioT1DM dataset.}
+\label{tab:boluses}
+\small
+\begin{tabular}{|crr|rrrrc|}
+    \cline{4-8}
+    \multicolumn{3}{c|}{} & \multicolumn{5}{c|}{Insulin Per Bolus}\\
+	\hline
+	Subject & \multicolumn{1}{c}{Bolus$^{(\pm c)}$} & \multicolumn{1}{c|}{Bolus$^{(+c)}$}
+	& \multicolumn{1}{c}{Minimum} & \multicolumn{1}{c}{Maximum} & \multicolumn{1}{c}{Median} & \multicolumn{1}{c}{Average} & StdDev\\
+	\hline
+	559 & 186 & 132 & 0.1 & 9.3 & 3.6 & 3.7 & 1.9\\
+    563 & 424 & 197 & 0.1 & 24.7 & 7.8 & 8.0 & 4.2\\
+    570 & 1,345 & 132 & 0.2 & 12.1 & 1.3 & 1.8 & 2.1\\
+	575 & 271 & 175 & 0.1 & 12.8 & 4.4 & 4.1 & 3.0\\
+	588 & 221 & 195 & 0.4 & 10.0 & 3.5 & 4.3 & 2.3\\
+	591 & 331 & 204 & 0.1 & 9.4 & 2.9 & 3.1 & 1.8\\
+	\hline
+	2018 Total & 2,758 & 1,035 & 0.1 & 24.7 & 1.9 & 3.5 & 3.4\\
+	\hline
+	540 & 521 & 220 & 0.1 & 11.4 & 2.0 & 3.0 & 2.8\\
+	544 & 264 & 149 & 0.7 & 22.5 & 5.0 & 6.5 & 4.9\\
+	552 & 426 & 246 & 0.1 & 16.0 & 2.8 & 3.9 & 3.3\\
+	567 & 366 & 202 & 0.2 & 25.0 & 11.4 & 12.0 & 5.8\\
+	584 & 311 & 188 & 0.1 & 16.2 & 9.1 & 7.3 & 3.1\\
+	596 & 230 & 0 & 0.2 & 7.6 & 3.3 & 3.0 & 1.5\\
+	\hline
+	2020 Total & 2,118 & 1,169 & 0.1 & 25.0 & 4.0 & 5.8 & 5.0\\
+	\hline
+	Combined Total & 4,876 & 2,204 & 0.1 & 25.0 & 2.9 & 4.5 & 4.3\\
+	\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+\section{From Meals and Bolus Events to Recommendation Examples}
+\label{sec:examples}
+
+In all recommendation scenarios, the prediction window ranges between the present time $t$ and the prediction horizon $t + 10 + \tau$. For the carbohydrate or bolus recommendation scenarios, the meal or the bolus is assumed to occur at time $t +10$. For the bolus given carbs scenario, the bolus occurs at time $t+10$ and is followed by a meal at time $t+20$, which matches the pre-processing of the meal data. For evaluation purposes, $\tau$ is set to values between 30 and 90 minutes with a step of 5 minutes, i.e, $\tau \in \{30, 35, 40, ..., 90\}$ for a total of 13 different values. As such, each meal/bolus event in the data results in 13 recommendation examples, one example for each value of $\tau$. While all 13 examples use the same value for the prediction label, e.g., $B_{t + 10}$ for bolus prediction, they will differ in terms of the target \ac{BG} feature $G_{t + 10 + \tau}$ and the $\tau$ feature, both used directly as input to the FC layers in the architectures shown in Figures~\ref{fig:carbs} and~\ref{fig:bolus}. For the bolus given carbs scenario, the 13 examples are only created when there is a meal that had a bolus delivered 10 minutes prior. Due to the way the data is pre-processed, it is guaranteed that if a meal had a bolus associated with it, the bolus will be exactly 10 minutes before the meal. 
+
+Table \ref{tab:c1_examples} shows the number of {\it inertial} examples for 5 prediction horizons, as well as the total over all 13 possible prediction horizons. Table \ref{tab:c2_examples} shows the number of {\it unrestricted} examples. Since the same number of unrestricted examples are available for every prediction horizon, only the totals are shown. The only exceptions would be if an event was near the end of a subject's data and the prediction horizon $t+10+\tau$ goes past the end of the dataset for some value of $\tau$.
+
+\begin{table}[ht]\setlength{\tabcolsep}{4pt}
+\begin{center}
+\caption{{\it Inertial} ({\it I}) examples by recommendation scenario and prediction horizon. Carbs$^{(\pm b)}$ refers to all carbohydrate intake events; Carbs$^{(-b)}$ refers to carbohydrate intakes without a bolus.}
+\label{tab:c1_examples}
+\small
+\begin{tabular}{|l|rrrr|rrrr|}
+    \cline{2-9}
+    \multicolumn{1}{c}{}& \multicolumn{4}{|c|}{Carbs$^{(\pm b)}$ recommendation} & \multicolumn{4}{c|}{Carbs$^{(-b)}$ recommendation}\\
+    \hline
+    Horizon & Training & Validation & Testing & Total {\it I} & Training & Validation & Testing & Total {\it I}\\
+    \hline
+%    \multirow{6}{*}{Carbohydrate}
+    $\tau=30$ & 1,192 & 340 & 331 & 1,863 & 265 & 53 & 40 & 358\\
+    $\tau=45$ & 1,156 & 334 & 321 & 1,811 & 255 & 51 & 40 & 346\\ 
+    $\tau=60$ & 1,121 & 318 & 315 & 1,754 & 243 & 50 & 40 & 333\\
+    $\tau=75$ & 1,057 & 301 & 293 & 1,651 & 226 & 44 & 34 & 304\\ 
+    $\tau=90$ & 975 & 279 & 278 & 1,532 & 200 & 40 & 31 & 271\\
+    All 13 horizons & 14,343 & 4,103 & 4,007 & 22,453 & 3,100 & 620 & 486 & 4,206\\
+    \hline
+%    \hline
+	\multicolumn{5}{c}{}\\[-1.5ex]
+	\cline{2-9}
+    \multicolumn{1}{c}{} & \multicolumn{4}{|c|}{Bolus$^{(\pm c)}$ recommendation} & \multicolumn{4}{c|}{Bolus$^{(+ c)}$ recommendation}\\
+    \hline
+%    \multirow{6}{*}{Bolus}
+    Horizon & Training & Validation & Testing & Total {\it I} & Training & Validation & Testing & Total {\it I}\\
+    \hline
+    $\tau=30$ & 461 & 160 & 143 & 764 & 856 & 267 & 271 & 1,394\\
+    $\tau=45$ & 416 & 142 & 124 & 682 & 833 & 259 & 258 & 1,350\\
+    $\tau=60$ & 368 & 124 & 104 & 596 & 816 & 253 & 249 & 1,318\\
+    $\tau=75$ & 303 & 102 & 96 & 501 & 790 & 243 & 243 & 1,276\\
+    $\tau=90$ & 271 & 90 & 86 & 447 & 743 & 234 & 229 & 1,206\\
+    All 13 horizons & 4,732 & 1,606 & 1,423 & 7,761 & 10,514 & 3,269 & 3,249 & 17,032\\
+    \hline
+%    \hline
+%    \multirow{6}{*}{Bolus Given Carbs}
+%    \multicolumn{5}{|c|}{Bolus given carbs recommendation}\\
+%    \hline
+%    Horizon & Training & Validation & Testing & Total {\it I}\\
+%    \hline
+%    $\tau=30$ & 856 & 267 & 271 & 1,394\\
+%    $\tau=45$ & 833 & 259 & 258 & 1,350\\ 
+%    $\tau=60$ & 816 & 253 & 249 & 1,318\\
+%    $\tau=75$ & 790 & 243 & 243 & 1,276\\ 
+%    $\tau=90$ & 743 & 234 & 229 & 1,206\\
+%    All 13 horizons & 10,514 & 3,269 & 3,249 & 17,032\\
+%    \hline
+    
+\end{tabular}
+\end{center}
+\end{table}
+
+\begin{table}[ht]\setlength{\tabcolsep}{4pt}
+\begin{center}
+\caption{{\it Unrestricted} (U) examples by recommendation scenario,  also showing, in the last column, the total number of non-inertial ($U - I$) examples. Carbs$^{(\pm b)}$ refers to all carbohydrate intake events; Carbs$^{(-b)}$ refers to carbohydrate intakes without a bolus.}
+\label{tab:c2_examples}
+\small
+\begin{tabular}{|l|rrrr|r|}
+	\hline
+	Scenario & Training & Validation & Testing & Total $U$ & Total $U - I$\\
+	\hline
+	Carbs$^{(\pm b)}$ & 17,937 & 5,106 & 4,943 & 27,986 & 5,533\\
+	Carbs$^{(-b)}$  & 4,140 & 853 & 624 & 5,617 & 1,411\\
+	Bolus$^{(\pm c)}$ & 19,640 & 6,279 & 6,136 & 32,055 & 24,294\\
+	Bolus$^{(+c)}$ & 12,052 & 3,784 & 3,816 & 19,652 & 2,620\\
+	\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+For the carbohydrate and bolus given carbs recommendation scenarios, the gap between the number of {\it inertial} and {\it unrestricted} examples is not very large, as most examples qualify as inertial examples. However, in the bolus recommendation scenario, there is a very sizable gap between the number of inertial vs. unrestricted examples. This is because a significant number of boluses are associated with meals, and since these meals are timestamped to be 10 minutes after the bolus, the result is that a bolus at time $t + 10$ will be associated with a meal at time $t + 20$. Therefore, for preprandial boluses at $t + 10$, the meal at time $t + 20$ will prohibit the creation of inertial recommendation examples, because by definition inertial examples do not allow the presence of other events in the prediction window $(t, t + 10 + \tau)$.
+% every bolus that had a meal associated with it will have been taken 10 minutes prior to a meal. This means there is a meal at $t+20$ for every bolus that was associated with a meal. This meal will disallow an example to be classified as a C$_1$ example since $t+20$ is within the prediction window. This same effect does not apply for the bolus given carbohydrates prediction scenario is because the meal at $t+20$ is allowed in C$_1$ examples in this scenario. If this were not the case, there would be zero C$_1$ examples for the bolus given carbohydrates

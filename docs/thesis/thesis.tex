@@ -1,0 +1,150 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%
+%% This file provides a template that can be used in concert with the
+%% ohio-etd class to generate an electronic thesis or dissertation which
+%% meets the formatting requirements at Ohio University.
+%%
+%% To use the template, copy this file (template.tex) and ohio-etd.cls into
+%% the same directory and edit this template as required.  Reference
+%% ohio-etd.pdf for additional instructions on using this class.
+%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+%% Load the class.  Available options are: numbered, pdftex, cmfont,
+%% singlespacetables, draft, 11pt, 12pt, leqno, and fleqn
+
+\documentclass[numbered,pdftex]{ohio-etd}
+
+
+%% Other packages that may be of use.  Delete or comment out (using a
+%% percent sign in the first column) if they are not desired.  Reference
+%% the corresponding documentation for more information on how to use these
+%% packages.
+
+\usepackage[square,sort&compress,numbers]{natbib} % Provides formatting for
+                                                  % citations
+\usepackage{textcomp} % Provides math symbols that can be used in text mode
+\usepackage{amssymb}  % Provides additional AMS math symbols.  Note that
+                      % amsmath is loaded as part of the ohio-etd class
+\usepackage{bm}       % Provides bold-faced math symbols
+\usepackage{booktabs} % Provides improved table formatting
+\usepackage{dcolumn}  % Provides table columns aligned at decimal points
+\usepackage{multirow} % Provides table elements spanning multiple rows
+\usepackage{graphicx} % Standard package to incorporate graphics
+\usepackage[printonlyused]{acronym} % Provides a method for incorporating
+                                    % acronyms and building an acronym list
+                                    
+\usepackage[T1]{fontenc}
+\usepackage{ragged2e}
+
+\graphicspath{{figures/}} % Allows graphics files to be stored in a
+                          % separate directory
+
+
+
+%% Required front matter definitions
+
+\degree    {MS}              % MS, MA, MCTP, or PhD
+\graduation{May}{2021}    % May, August, or December 
+
+\title     {LSTMs and Deep Residual Networks for Carbohydrate and Bolus Recommendations in Type 1 Diabetes Management}
+\author    {Jeremy T.}{Beauchamp} 
+
+\advisor   {Razvan Bunescu}{Associate Professor}
+\dean      {Mei Wei}{Dean and Moss Professor of Engineering Education}
+
+\program   {Computer Science}            % e.g. Electrical Engineering
+\department{School of Electrical Engineering and Computer Science} % e.g. School of Electrical Engineering 
+                                     %      and Computer Science
+\college   {Russ College of Engineering and Technology}   % e.g. Russ College of Engineering and
+                                     %      Technology
+
+\abstract{
+\justifying
+To avoid serious diabetic complications, people with type 1 diabetes must keep their \ac{BGLs} as close to normal as possible. Insulin dosages and carbohydrate consumption are important considerations in managing \ac{BGLs}. Since the 1960s, models have been developed to forecast blood glucose levels based on the history of \ac{BGLs}, insulin dosages, carbohydrate intake, and other physiological and lifestyle factors. Such predictions can be used to alert people of impending unsafe \ac{BGLs} or to control insulin flow in an artificial pancreas. In past research, an LSTM-based approach to blood glucose level prediction was developed to process "what if" scenarios, in which people could enter foods they might eat or insulin amounts they might take and then see the affect on future \ac{BGLs}. In this work, the "what-if" scenario is inverted and a similar architecture is introduced, based on chaining two LSTMs that can be trained to make either insulin or carbohydrate recommendations aimed at reaching a desired BG level in the future. Leveraging a recent state-of-the-art model for time series forecasting, a novel deep residual architecture is proposed for the same recommendation task, in which the two LSTM chain is used as a repeating block. Experimental evaluations using real patient data from the OhioT1DM dataset show that the new integrated architecture compares favorably with the previous LSTM-based approach, substantially outperforming the baselines. The promising results suggest that this novel approach could potentially be of practical use to people with type 1 diabetes for self-management of \ac{BGLs}.}
+
+%To avoid serious diabetic complications, people with type 1 diabetes must keep their blood glucose levels (BGLs) as close to normal as possible. Insulin dosages and carbohydrate consumption are important considerations in managing BGLs. Since the 1960s, models have been developed to forecast blood glucose levels based on the history of BGLs, insulin dosages, carbohydrate intake, and other physiological and lifestyle factors. Such predictions can be used to alert people of impending unsafe BGLs or to control insulin flow in an artificial pancreas. In past work, we have introduced an LSTM-based approach to blood glucose level prediction aimed at "what if" scenarios, in which people could enter foods they might eat or insulin amounts they might take and then see the effect on future BGLs. In this work, we invert the "what-if" scenario and introduce a similar architecture based on chaining two LSTMs that can be trained to make either insulin or carbohydrate recommendations aimed at reaching a desired BG level in the future. Leveraging a recent state-of-the-art model for time series forecasting, we then derive a novel architecture for the same recommendation task, in which the two LSTM chain is used as a repeating block inside a deep residual architecture. Experimental evaluations using real patient data from the OhioT1DM dataset show that the new integrated architecture compares favorably with the previous LSTM-based approach, substantially outperforming the baselines. The promising results suggest that this novel approach could potentially be of practical use to people with type 1 diabetes for self-management of BGLs.
+
+%% Optional front matter definitions.  Delete or comment out if not needed
+
+%\coadvisor {Coadvisor's Full Name}{Coadvisor's Full Title}
+
+%\dedication{}
+
+\acknowledgments{
+I would like to thank my advisor Dr. Razvan Bunescu for his exceptional guidance, knowledge, and mostly, his patience and professionalism. I have had the pleasure of learning a lot from Dr. Bunescu and this research certainly would not have been possible without him. I would also like to thank Dr. Cindy Marling for all of her assistance and knowledge throughout the research process. In addition, I would like to thank Zhongen Li for his help implementing parts of this project.
+}
+
+%% If you prefer to provide "acknowledgements" instead (note the added "e"
+%% between the "g" and the "m") then add the "e" in the macro name so that
+%% it reads "\acknowledgements".}
+
+%% Additional "lists" can be added to the end of the front matter using the
+%% \addlistof macro.  For example:
+%\addlistof{Symbols}{Insert your list of symbols here or comment out this line.}
+%% Note that the command "\input{symbols}" can be used if the symbol list is
+%% contained in a separate file called "symbols.tex"}
+
+%\addlistof{Acronyms}{
+\input{acronyms.tex}
+%}
+
+%% Use "\input{acronyms}" if the acronym list is in a separate file called
+%% "acronyms.tex".  Note that the formatting generated by the acronym package
+%% can be forced into singlespaced text by inserting "\setlength\itemsep{0pt}
+%% \setlength\parskip{0pt}" into the "acronym" environment.} 
+
+%% For documents created by government employees as part of their
+%% employment.  The wording of the disclaimer can be specified using an
+%% option.  See the documentation for more information.
+
+% \govtdisclaimer    
+
+% \notables  % Prevent a list of tables from being created
+% \nofigures % Prevent a list of figures from being created
+
+\begin{document}
+\justifying
+
+\makefrontmatter    % Creates all of the front matter pages.
+
+%% Body of the text follows, using \chapter, \section, \subsection,
+%% \subsubsection, \paragraph, and \subparagraph to generate the
+%% section headings.  For convenience, it may be useful to break the
+%% full document into separate files, perhaps divided by chapters.  In
+%% that case, the files would be loaded here using "\input{filename}"
+
+\input{introduction}
+
+\input{background}
+
+\input{models}
+
+\input{data}
+
+\input{methods}
+
+\input{conclusion}
+
+%% The \references command marks the point where the bibliography will
+%% be inserted.  In the example below, the BibTeX commands are
+%% inserted into the macro definition, but one could also manually
+%% enter the bibliography entries if desired.
+\references{
+  %ETD does not define a particular required bibliography style.
+  %They DO require entries to end in a period UNLESS they end in a URL
+  %or DOI AND that DOIs be set in the same font as everything else.
+  %I have modified the alphaurl style file, to conform to these requirements.
+  %\bibliographystyle{alphaurl_etd}   
+  \bibliographystyle{acm}
+  \bibliography{thesis}
+}
+
+\appendix           % Indicates the transition from chapters to appendices.  
+                    % Subsequent 
+
+%\chapter{An Appendix}
+%\section{A Section in the Appendix}
+
+\end{document}
