@@ -8,7 +8,7 @@ In addition to my thesis, my research produced three published papers:
 
 * *"LSTMs and Deep Residual Networks for Carbohydrate and Bolus Recommendations in Type 1 Diabetes Management"* by Jeremy Beauchamp, Razvan Bunescu, Cindy Marling, Zhongen Li, and Chang Liu. [[link]](https://www.mdpi.com/1424-8220/21/9/3303)
 
-* *"An LSTM-based Approach for Insulin andCarbohydrate Recommendations in Type 1Diabetes Self-Management"* by Jeremy Beauchamp, Razvan Bunescu, and Cindy Marling. [[link]](http://oucsace.cs.ohio.edu/~smarthlt/pubs/chapter21.pdf)
+* *"An LSTM-based Approach for Insulin and Carbohydrate Recommendations in Type 1 Diabetes Self-Management"* by Jeremy Beauchamp, Razvan Bunescu, and Cindy Marling. [[link]](http://oucsace.cs.ohio.edu/~smarthlt/pubs/chapter21.pdf)
 
 * *"A General Neural Architecture for Carbohydrate and Bolus Recommendations in Type 1 Diabetes Management"* by Jeremy Beauchamp, Razvan Bunescu, and Cindy Marling. [[link]](http://ceur-ws.org/Vol-2675/paper6.pdf)
 
